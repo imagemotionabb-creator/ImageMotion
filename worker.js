@@ -1,1294 +1,939 @@
-const TEXT_MODEL = "@cf/meta/llama-3.1-8b-fast-v2";
+/**
+ * ============================================================
+ * BRIACK AI 5 — BACKEND WORKER
+ * ============================================================
+ *
+ * Routes :
+ *
+ * GET  /health
+ * POST /chat
+ * POST /generate-script
+ * POST /generate-image
+ * POST /generate-audio
+ * POST /generate-video
+ * GET  /video-status?id=...
+ *
+ * Cloudflare Workers AI :
+ *   env.AI
+ *
+ * Secrets :
+ *   REPLICATE_API_TOKEN
+ *
+ * ============================================================
+ */
+
+const TEXT_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell";
 
-export default {
-  async fetch(request, env) {
-
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Max-Age": "86400"
-    };
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      });
-    }
-
-    const url = new URL(request.url);
-
-    try {
-
-      /* ================================
-         TEST VOCAL HTTPS
-         ================================ */
-
-      if (url.pathname === "/test-voice") {
-
-        const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-
-<meta charset="UTF-8">
-
-<meta
-  name="viewport"
-  content="width=device-width, initial-scale=1.0"
->
-
-<title>Briack AI 5 — Test vocal</title>
-
-<style>
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  padding: 20px;
-
-  background:
-    radial-gradient(
-      circle at top,
-      #18245c,
-      #080b18 50%,
-      #03040a
-    );
-
-  color: white;
-  font-family: Arial, sans-serif;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.card {
-  width: 100%;
-  max-width: 520px;
-  padding: 28px;
-
-  border-radius: 24px;
-
-  background:
-    rgba(15, 20, 45, 0.90);
-
-  border:
-    1px solid
-    rgba(120, 140, 255, 0.30);
-
-  box-shadow:
-    0 20px 60px
-    rgba(0, 0, 0, 0.50);
-
-  backdrop-filter:
-    blur(18px);
-}
-
-h1 {
-  margin-top: 0;
-  text-align: center;
-  font-size: 28px;
-}
-
-.subtitle {
-  text-align: center;
-  color: #aeb7d9;
-  margin-bottom: 25px;
-}
-
-button {
-  width: 100%;
-  padding: 16px;
-  margin-top: 12px;
-
-  border: none;
-  border-radius: 14px;
-
-  font-size: 16px;
-  font-weight: bold;
-
-  cursor: pointer;
-}
-
-#start {
-  background:
-    linear-gradient(
-      135deg,
-      #6366f1,
-      #06b6d4
-    );
-
-  color: white;
-}
-
-#stop {
-  background: #252b45;
-  color: white;
-}
-
-#clear {
-  background: #151a30;
-  color: #c9d2f5;
-}
-
-textarea {
-  width: 100%;
-  min-height: 180px;
-
-  margin-top: 20px;
-  padding: 16px;
-
-  border-radius: 14px;
-
-  border:
-    1px solid
-    rgba(150, 160, 220, 0.25);
-
-  background:
-    rgba(0, 0, 0, 0.30);
-
-  color: white;
-
-  font-size: 16px;
-
-  outline: none;
-
-  resize: vertical;
-}
-
-#status {
-  margin-top: 18px;
-  padding: 14px;
-
-  border-radius: 12px;
-
-  background:
-    rgba(0, 0, 0, 0.30);
-
-  text-align: center;
-
-  line-height: 1.5;
-
-  color: #c9d2f5;
-}
-
-.info {
-  margin-top: 18px;
-
-  font-size: 13px;
-  line-height: 1.5;
-
-  color: #929bc0;
-
-  text-align: center;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<main class="card">
-
-<h1>🎤 Briack AI 5</h1>
-
-<div class="subtitle">
-Test de reconnaissance vocale HTTPS
-</div>
-
-<button id="start">
-🎙️ COMMENCER À PARLER
-</button>
-
-<button id="stop">
-⏹️ ARRÊTER
-</button>
-
-<button id="clear">
-🗑️ EFFACER
-</button>
-
-<textarea
-  id="text"
-  placeholder="Le texte reconnu apparaîtra ici..."
-></textarea>
-
-<div id="status">
-Préparation...
-</div>
-
-<div class="info">
-Appuyez sur « Commencer à parler »,
-autorisez le microphone si Chrome
-le demande, puis parlez normalement.
-</div>
-
-</main>
-
-<script>
-
-const startButton =
-  document.getElementById("start");
-
-const stopButton =
-  document.getElementById("stop");
-
-const clearButton =
-  document.getElementById("clear");
-
-const textBox =
-  document.getElementById("text");
-
-const statusBox =
-  document.getElementById("status");
-
-
-const SpeechRecognition =
-  window.SpeechRecognition ||
-  window.webkitSpeechRecognition;
-
-
-let recognition = null;
-
-let isListening = false;
-
-
-/* ================================
-   VÉRIFICATION
-   ================================ */
-
-if (!SpeechRecognition) {
-
-  statusBox.textContent =
-    "❌ La reconnaissance vocale n'est pas disponible dans ce navigateur.";
-
-  startButton.disabled = true;
-
-  stopButton.disabled = true;
-
-} else {
-
-  recognition =
-    new SpeechRecognition();
-
-
-  recognition.lang =
-    "fr-FR";
-
-
-  recognition.continuous =
-    false;
-
-
-  recognition.interimResults =
-    true;
-
-
-  recognition.maxAlternatives =
-    1;
-
-
-  /* ================================
-     DÉBUT
-     ================================ */
-
-  recognition.onstart =
-    function() {
-
-      isListening = true;
-
-      statusBox.textContent =
-        "🎙️ MICROPHONE ACTIF — PARLEZ MAINTENANT";
-
-      startButton.textContent =
-        "🔴 ÉCOUTE EN COURS";
-
-    };
-
-
-  /* ================================
-     RÉSULTAT
-     ================================ */
-
-  recognition.onresult =
-    function(event) {
-
-      let finalText = "";
-
-      let interimText = "";
-
-
-      for (
-        let i = event.resultIndex;
-        i < event.results.length;
-        i++
-      ) {
-
-        const transcript =
-          event.results[i][0].transcript;
-
-
-        if (
-          event.results[i].isFinal
-        ) {
-
-          finalText += transcript;
-
-        } else {
-
-          interimText += transcript;
-
-        }
-
-      }
-
-
-      textBox.value =
-        finalText || interimText;
-
-    };
-
-
-  /* ================================
-     ERREUR
-     ================================ */
-
-  recognition.onerror =
-    function(event) {
-
-      isListening = false;
-
-
-      console.error(
-        "Erreur vocale :",
-        event.error
-      );
-
-
-      let message =
-        "❌ Erreur : " +
-        event.error;
-
-
-      if (
-        event.error === "not-allowed"
-      ) {
-
-        message =
-          "❌ Microphone refusé. Autorisez le microphone pour Chrome dans les paramètres Android.";
-
-      }
-
-
-      if (
-        event.error === "service-not-allowed"
-      ) {
-
-        message =
-          "❌ Le service de reconnaissance vocale est bloqué.";
-
-      }
-
-
-      if (
-        event.error === "audio-capture"
-      ) {
-
-        message =
-          "❌ Aucun microphone disponible.";
-
-      }
-
-
-      if (
-        event.error === "no-speech"
-      ) {
-
-        message =
-          "⚠️ Aucune parole détectée.";
-
-      }
-
-
-      if (
-        event.error === "network"
-      ) {
-
-        message =
-          "❌ Problème réseau avec le service de reconnaissance vocale.";
-
-      }
-
-
-      if (
-        event.error === "aborted"
-      ) {
-
-        message =
-          "ℹ️ Écoute arrêtée.";
-
-      }
-
-
-      statusBox.textContent =
-        message;
-
-
-      startButton.textContent =
-        "🎙️ COMMENCER À PARLER";
-
-    };
-
-
-  /* ================================
-     FIN
-     ================================ */
-
-  recognition.onend =
-    function() {
-
-      isListening = false;
-
-
-      statusBox.textContent =
-        "✅ Écoute terminée.";
-
-
-      startButton.textContent =
-        "🎙️ COMMENCER À PARLER";
-
-    };
-
-
-  /* ================================
-     DÉMARRER
-     ================================ */
-
-  startButton.onclick =
-    function() {
-
-      if (isListening) {
-
-        return;
-
-      }
-
-
-      try {
-
-        textBox.value = "";
-
-
-        statusBox.textContent =
-          "⏳ Démarrage du microphone...";
-
-
-        recognition.start();
-
-      } catch(error) {
-
-        console.error(error);
-
-
-        statusBox.textContent =
-          "⚠️ Impossible de démarrer : " +
-          error.message;
-
-      }
-
-    };
-
-
-  /* ================================
-     ARRÊTER
-     ================================ */
-
-  stopButton.onclick =
-    function() {
-
-      if (!recognition) {
-
-        return;
-
-      }
-
-
-      try {
-
-        recognition.stop();
-
-      } catch(error) {
-
-        console.error(error);
-
-      }
-
-    };
-
-
-  /* ================================
-     EFFACER
-     ================================ */
-
-  clearButton.onclick =
-    function() {
-
-      textBox.value = "";
-
-      statusBox.textContent =
-        "✅ Zone de texte effacée.";
-
-    };
-
-
-  statusBox.textContent =
-    "✅ Reconnaissance vocale détectée. Appuyez sur le bouton.";
-
-}
-
-
-/* =====================================================
-   FIN DU SCRIPT VOCAL
-   ===================================================== */
-
-</script>
-
-</body>
-
-</html>`;
-
-        return new Response(
-          html,
-          {
-            status: 200,
-
-            headers: {
-              "Content-Type":
-                "text/html; charset=UTF-8",
-
-              "Cache-Control":
-                "no-store",
-
-              ...corsHeaders
-            }
-          }
-        );
-      }
-
-
-      /* ================================
-         API PRINCIPALE
-         ================================ */
-
-      if (url.pathname === "/") {
-
-        return jsonResponse(
-          {
-            success: true,
-            application: "Briack AI 5",
-            service: "Briack AI 5 API",
-            status: "online",
-            version: "3.2.0",
-            workersAI: Boolean(env.AI)
-          },
-          corsHeaders
-        );
-
-      }
-
-
-      /* ================================
-         HEALTH
-         ================================ */
-
-      if (url.pathname === "/health") {
-
-        return jsonResponse(
-          {
-            success: true,
-            status: "healthy",
-            workersAI: Boolean(env.AI),
-            timestamp:
-              new Date().toISOString()
-          },
-          corsHeaders
-        );
-
-      }
-
-
-      /* ================================
-         WORKERS AI
-         ================================ */
-
-      if (!env.AI) {
-
-        return jsonResponse(
-          {
-            success: false,
-            error:
-              "Le binding Workers AI 'AI' est introuvable."
-          },
-          corsHeaders,
-          500
-        );
-
-      }
-
-
-      /* ================================
-         TEST AI
-         ================================ */
-
-      if (url.pathname === "/test-ai") {
-
-        if (request.method !== "POST") {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Cette route utilise POST."
-            },
-            corsHeaders,
-            405
-          );
-
-        }
-
-
-        let body = {};
-
-
-        try {
-
-          body =
-            await request.json();
-
-        } catch {
-
-          body = {};
-
-        }
-
-
-        const prompt =
-          typeof body.prompt === "string" &&
-          body.prompt.trim()
-
-            ? body.prompt.trim()
-
-            : "Réponds uniquement : Briack AI 5 fonctionne.";
-
-
-        const result =
-          await env.AI.run(
-            TEXT_MODEL,
-            {
-              prompt:
-                prompt,
-
-              max_tokens:
-                100
-            }
-          );
-
-
-        return jsonResponse(
-          {
-            success: true,
-            message:
-              "Workers AI fonctionne.",
-            model:
-              TEXT_MODEL,
-            response:
-              result?.response || "",
-            raw:
-              result
-          },
-          corsHeaders
-        );
-
-      }
-
-
-      /* ================================
-         CHAT
-         ================================ */
-
-      if (url.pathname === "/chat") {
-
-        if (request.method !== "POST") {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Cette route utilise POST."
-            },
-            corsHeaders,
-            405
-          );
-
-        }
-
-
-        let body;
-
-
-        try {
-
-          body =
-            await request.json();
-
-        } catch {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le corps de la requête doit être un JSON valide."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        const message =
-          typeof body?.message === "string"
-            ? body.message.trim()
-            : "";
-
-
-        if (!message) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le message est obligatoire."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        if (message.length > 12000) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le message est trop long."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        const result =
-          await env.AI.run(
-            TEXT_MODEL,
-            {
-              prompt:
-                "Tu es Briack AI 5, un assistant créatif professionnel et honnête. " +
-                "Tu aides l'utilisateur à créer des images, vidéos, scripts, voix, musiques et projets créatifs. " +
-                "Tu ne prétends jamais qu'une fonction fonctionne si elle n'est pas réellement disponible. " +
-                "Réponds dans la langue de l'utilisateur.\n\n" +
-                "Utilisateur :\n" +
-                message,
-
-              max_tokens:
-                700,
-
-              temperature:
-                0.7
-            }
-          );
-
-
-        return jsonResponse(
-          {
-            success: true,
-            model:
-              TEXT_MODEL,
-            response:
-              result?.response || "",
-            raw:
-              result
-          },
-          corsHeaders
-        );
-
-      }
-
-
-      /* ================================
-         SCRIPT
-         ================================ */
-
-      if (
-        url.pathname ===
-        "/generate-script"
-      ) {
-
-        if (request.method !== "POST") {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Cette route utilise POST."
-            },
-            corsHeaders,
-            405
-          );
-
-        }
-
-
-        let body;
-
-
-        try {
-
-          body =
-            await request.json();
-
-        } catch {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "JSON invalide."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        const subject =
-          typeof body?.prompt === "string"
-            ? body.prompt.trim()
-            : "";
-
-
-        if (!subject) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le sujet du script est obligatoire."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        const result =
-          await env.AI.run(
-            TEXT_MODEL,
-            {
-              prompt:
-                "Tu es le moteur de génération de scripts de Briack AI 5.\n\n" +
-                "Crée un script captivant, naturel, bien structuré et adapté au sujet suivant.\n\n" +
-                "Sujet :\n" +
-                subject,
-
-              max_tokens:
-                1500,
-
-              temperature:
-                0.8
-            }
-          );
-
-
-        return jsonResponse(
-          {
-            success: true,
-            model:
-              TEXT_MODEL,
-            script:
-              result?.response || "",
-            raw:
-              result
-          },
-          corsHeaders
-        );
-
-      }
-
-
-      /* ================================
-         IMAGE
-         ================================ */
-
-      if (
-        url.pathname ===
-        "/generate-image"
-      ) {
-
-        if (request.method !== "POST") {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Cette route utilise POST."
-            },
-            corsHeaders,
-            405
-          );
-
-        }
-
-
-        let body;
-
-
-        try {
-
-          body =
-            await request.json();
-
-        } catch {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le corps de la requête doit être un JSON valide."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        const prompt =
-          typeof body?.prompt === "string"
-            ? body.prompt.trim()
-            : "";
-
-
-        if (!prompt) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le prompt est obligatoire."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        if (prompt.length > 2048) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "Le prompt est trop long. Maximum : 2048 caractères."
-            },
-            corsHeaders,
-            400
-          );
-
-        }
-
-
-        try {
-
-          const result =
-            await env.AI.run(
-              IMAGE_MODEL,
-              {
-                prompt:
-                  prompt,
-
-                steps:
-                  4
-              }
-            );
-
-
-          if (
-            !result ||
-            typeof result.image !== "string" ||
-            result.image.length === 0
-          ) {
-
-            return jsonResponse(
-              {
-                success: false,
-                error:
-                  "FLUX n'a pas renvoyé d'image."
-              },
-              corsHeaders,
-              500
-            );
-
-          }
-
-
-          let binaryString;
-
-
-          try {
-
-            binaryString =
-              atob(result.image);
-
-          } catch {
-
-            return jsonResponse(
-              {
-                success: false,
-                error:
-                  "L'image FLUX reçue est invalide."
-              },
-              corsHeaders,
-              500
-            );
-
-          }
-
-
-          const imageBytes =
-            Uint8Array.from(
-              binaryString,
-              character =>
-                character.charCodeAt(0)
-            );
-
-
-          if (
-            imageBytes.length === 0
-          ) {
-
-            return jsonResponse(
-              {
-                success: false,
-                error:
-                  "FLUX a renvoyé une image vide."
-              },
-              corsHeaders,
-              500
-            );
-
-          }
-
-
-          return new Response(
-            imageBytes,
-            {
-              status: 200,
-
-              headers: {
-                "Content-Type":
-                  "image/jpeg",
-
-                "Cache-Control":
-                  "no-store",
-
-                ...corsHeaders
-              }
-            }
-          );
-
-
-        } catch (error) {
-
-          return jsonResponse(
-            {
-              success: false,
-              error:
-                "La génération de l'image a échoué.",
-              details:
-                String(
-                  error?.message ||
-                  error ||
-                  "Erreur inconnue"
-                )
-            },
-            corsHeaders,
-            500
-          );
-
-        }
-
-      }
-
-
-      /* ================================
-         VIDÉO
-         ================================ */
-
-      if (
-        url.pathname === "/generate-video" ||
-        url.pathname === "/video-status" ||
-        url.pathname === "/video-result"
-      ) {
-
-        return jsonResponse(
-          {
-            success: false,
-            available: false,
-            service: "video",
-            error:
-              "Le moteur vidéo n'est pas encore connecté."
-          },
-          corsHeaders,
-          501
-        );
-
-      }
-
-
-      /* ================================
-         VOIX IA
-         ================================ */
-
-      if (
-        url.pathname === "/generate-voice" ||
-        url.pathname === "/voice-status" ||
-        url.pathname === "/voice-result"
-      ) {
-
-        return jsonResponse(
-          {
-            success: false,
-            available: false,
-            service: "voice",
-            error:
-              "Le moteur vocal IA n'est pas encore connecté."
-          },
-          corsHeaders,
-          501
-        );
-
-      }
-
-
-      /* ================================
-         MUSIQUE
-         ================================ */
-
-      if (
-        url.pathname === "/generate-music"
-      ) {
-
-        return jsonResponse(
-          {
-            success: false,
-            available: false,
-            service: "music",
-            error:
-              "Le moteur musical n'est pas encore connecté."
-          },
-          corsHeaders,
-          501
-        );
-
-      }
-
-
-      /* ================================
-         404
-         ================================ */
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Route introuvable.",
-          path:
-            url.pathname
-        },
-        corsHeaders,
-        404
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        "Erreur générale du Worker :",
-        error
-      );
-
-
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Erreur interne du Worker.",
-          details:
-            String(
-              error?.message ||
-              error ||
-              "Erreur inconnue"
-            )
-        },
-        corsHeaders,
-        500
-      );
-
-    }
-
-  }
-
+const REPLICATE_API =
+  "https://api.replicate.com/v1/models/wan-video/wan-2.7-i2v/predictions";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400"
 };
 
 
-/* =====================================================
-   JSON RESPONSE
-   ===================================================== */
+/* ============================================================
+   UTILITAIRES
+   ============================================================ */
 
-function jsonResponse(
-  data,
-  corsHeaders,
-  status = 200
-) {
-
-  return new Response(
-    JSON.stringify(data),
-    {
-      status:
-        status,
-
-      headers: {
-        "Content-Type":
-          "application/json; charset=UTF-8",
-
-        ...corsHeaders
-      }
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...CORS_HEADERS
     }
+  });
+}
+
+
+function error(message, status = 400, details = null) {
+  return json({
+    success: false,
+    error: message,
+    ...(details ? { details } : {})
+  }, status);
+}
+
+
+async function readJSON(request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+
+/* ============================================================
+   OPTIONS / CORS
+   ============================================================ */
+
+function handleOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS
+  });
+}
+
+
+/* ============================================================
+   HEALTH
+   ============================================================ */
+
+async function health(env) {
+  return json({
+    success: true,
+    app: "Briack AI 5",
+    status: "online",
+    workersAI: !!env.AI,
+    textModel: TEXT_MODEL,
+    imageModel: IMAGE_MODEL,
+    timestamp: new Date().toISOString()
+  });
+}
+
+
+/* ============================================================
+   CHAT — ASSISTANT IA
+   ============================================================ */
+
+async function chat(request, env) {
+
+  if (!env.AI) {
+    return error(
+      "La liaison Workers AI n'est pas configurée.",
+      500
+    );
+  }
+
+  const body = await readJSON(request);
+
+  if (!body) {
+    return error("JSON invalide.");
+  }
+
+  const message =
+    typeof body.message === "string"
+      ? body.message.trim()
+      : "";
+
+  if (!message) {
+    return error("Le message est obligatoire.");
+  }
+
+  if (message.length > 12000) {
+    return error(
+      "Le message est trop long. Maximum 12000 caractères."
+    );
+  }
+
+  const language =
+    typeof body.language === "string"
+      ? body.language
+      : "fr";
+
+  const history =
+    Array.isArray(body.history)
+      ? body.history
+      : [];
+
+  const safeHistory = history
+    .filter(item =>
+      item &&
+      typeof item.role === "string" &&
+      typeof item.content === "string"
+    )
+    .slice(-12)
+    .map(item => ({
+      role:
+        item.role === "assistant"
+          ? "assistant"
+          : "user",
+      content:
+        item.content.slice(0, 6000)
+    }));
+
+
+  const systemPrompt = `
+Tu es Briack AI 5, un assistant IA professionnel intégré
+dans une plateforme mondiale de création.
+
+Ta mission est d'aider l'utilisateur à :
+- créer des images
+- créer des vidéos
+- transformer des images en vidéos
+- écrire des scripts
+- créer des voix
+- créer des projets multimédias
+- trouver des idées
+- améliorer des prompts
+- organiser des projets créatifs
+- comprendre les fonctionnalités de Briack AI 5
+- résoudre des problèmes techniques simples
+
+IDENTITÉ :
+Tu es professionnel, calme, précis, créatif et honnête.
+
+IMPORTANT :
+Tu ne dois jamais prétendre avoir exécuté une action si le backend
+ne l'a pas réellement exécutée.
+
+Si l'utilisateur demande une génération d'image, vidéo, audio,
+script ou autre fonction qui nécessite un outil spécialisé,
+explique brièvement ce qui doit être lancé par l'application.
+
+Ne dis jamais :
+"c'est fait"
+si aucune génération réelle n'a été exécutée.
+
+LANGUE :
+Réponds principalement dans la langue de l'utilisateur.
+
+Langue demandée :
+${language}
+
+STYLE :
+- réponses naturelles
+- pas de réponses artificiellement longues
+- explications claires
+- priorité à l'action
+- pas de jargon inutile
+- si plusieurs étapes sont nécessaires, utilise une liste numérotée
+
+BRIACK AI 5 doit être présenté comme une plateforme de création
+IA sérieuse, et non comme un simple chatbot.
+
+Tu peux aussi aider l'utilisateur à construire ses propres projets
+d'applications, jeux, vidéos et systèmes IA.
+`;
+
+
+  const messages = [
+    {
+      role: "system",
+      content: systemPrompt
+    },
+    ...safeHistory,
+    {
+      role: "user",
+      content: message
+    }
+  ];
+
+
+  try {
+
+    const result = await env.AI.run(
+      TEXT_MODEL,
+      {
+        messages,
+        max_tokens: 1200,
+        temperature: 0.7
+      }
+    );
+
+
+    let answer = "";
+
+    if (typeof result === "string") {
+      answer = result;
+    } else if (
+      result &&
+      typeof result.response === "string"
+    ) {
+      answer = result.response;
+    } else if (
+      result &&
+      typeof result.text === "string"
+    ) {
+      answer = result.text;
+    } else {
+      answer = JSON.stringify(result);
+    }
+
+
+    return json({
+      success: true,
+      type: "chat",
+      model: TEXT_MODEL,
+      message: answer,
+      response: answer
+    });
+
+  } catch (err) {
+
+    return error(
+      "Erreur lors de la génération de la réponse IA.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
+}
+
+
+/* ============================================================
+   SCRIPT → TEXTE
+   ============================================================ */
+
+async function generateScript(request, env) {
+
+  if (!env.AI) {
+    return error(
+      "La liaison Workers AI n'est pas configurée.",
+      500
+    );
+  }
+
+  const body = await readJSON(request);
+
+  if (!body) {
+    return error("JSON invalide.");
+  }
+
+  const topic =
+    typeof body.topic === "string"
+      ? body.topic.trim()
+      : "";
+
+  if (!topic) {
+    return error("Le sujet du script est obligatoire.");
+  }
+
+  if (topic.length > 8000) {
+    return error("Sujet trop long.");
+  }
+
+  const language =
+    typeof body.language === "string"
+      ? body.language
+      : "fr";
+
+  const duration =
+    body.duration || "60 secondes";
+
+  const style =
+    body.style || "documentaire réaliste";
+
+
+  const prompt = `
+Crée un script vidéo professionnel.
+
+Sujet :
+${topic}
+
+Langue :
+${language}
+
+Durée souhaitée :
+${duration}
+
+Style :
+${style}
+
+Structure :
+1. Accroche forte
+2. Introduction
+3. Développement
+4. Informations importantes
+5. Conclusion
+6. Appel à l'action naturel
+
+Le script doit être fluide et adapté à une narration vidéo.
+Ne fabrique pas de faits présentés comme certains.
+`;
+
+
+  try {
+
+    const result = await env.AI.run(
+      TEXT_MODEL,
+      {
+        prompt,
+        max_tokens: 1800,
+        temperature: 0.7
+      }
+    );
+
+
+    const script =
+      typeof result === "string"
+        ? result
+        : result?.response ||
+          result?.text ||
+          JSON.stringify(result);
+
+
+    return json({
+      success: true,
+      type: "script",
+      model: TEXT_MODEL,
+      script
+    });
+
+  } catch (err) {
+
+    return error(
+      "Erreur pendant la génération du script.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
+}
+
+
+/* ============================================================
+   IMAGE IA
+   ============================================================ */
+
+async function generateImage(request, env) {
+
+  if (!env.AI) {
+    return error(
+      "La liaison Workers AI n'est pas configurée.",
+      500
+    );
+  }
+
+  const body = await readJSON(request);
+
+  if (!body) {
+    return error("JSON invalide.");
+  }
+
+  const prompt =
+    typeof body.prompt === "string"
+      ? body.prompt.trim()
+      : "";
+
+  if (!prompt) {
+    return error("Le prompt image est obligatoire.");
+  }
+
+  if (prompt.length > 8000) {
+    return error("Prompt trop long.");
+  }
+
+
+  try {
+
+    const result = await env.AI.run(
+      IMAGE_MODEL,
+      {
+        prompt
+      }
+    );
+
+
+    if (!result) {
+      return error(
+        "Le modèle image n'a retourné aucun résultat.",
+        502
+      );
+    }
+
+
+    let imageBase64 = null;
+
+
+    if (typeof result === "string") {
+      imageBase64 = result;
+    }
+
+
+    if (
+      result &&
+      typeof result.image === "string"
+    ) {
+      imageBase64 = result.image;
+    }
+
+
+    if (!imageBase64) {
+      return json({
+        success: true,
+        type: "image",
+        model: IMAGE_MODEL,
+        result
+      });
+    }
+
+
+    const imageData =
+      imageBase64.startsWith("data:")
+        ? imageBase64
+        : `data:image/jpeg;base64,${imageBase64}`;
+
+
+    return json({
+      success: true,
+      type: "image",
+      model: IMAGE_MODEL,
+      image: imageData
+    });
+
+  } catch (err) {
+
+    return error(
+      "Erreur pendant la génération de l'image.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
+}
+
+
+/* ============================================================
+   AUDIO / TTS
+   ============================================================ */
+
+async function generateAudio(request, env) {
+
+  if (!env.AI) {
+    return error(
+      "La liaison Workers AI n'est pas configurée.",
+      500
+    );
+  }
+
+  const body = await readJSON(request);
+
+  if (!body) {
+    return error("JSON invalide.");
+  }
+
+  const text =
+    typeof body.text === "string"
+      ? body.text.trim()
+      : "";
+
+  if (!text) {
+    return error(
+      "Le texte à convertir en audio est obligatoire."
+    );
+  }
+
+  if (text.length > 10000) {
+    return error(
+      "Texte audio trop long. Maximum 10000 caractères."
+    );
+  }
+
+
+  /*
+   * Modèle TTS Cloudflare.
+   *
+   * On garde la route prête et séparée afin de pouvoir
+   * changer le modèle TTS sans toucher à l'application.
+   */
+
+  const model =
+    typeof body.model === "string" &&
+    body.model.trim()
+      ? body.model.trim()
+      : "@cf/myshell-ai/melotts";
+
+
+  try {
+
+    const input = {
+      text
+    };
+
+
+    const result = await env.AI.run(
+      model,
+      input
+    );
+
+
+    /*
+     * Certains modèles audio retournent :
+     *
+     * { audio: "base64..." }
+     *
+     * ou directement une chaîne.
+     */
+
+    let audio = null;
+
+
+    if (
+      result &&
+      typeof result.audio === "string"
+    ) {
+      audio = result.audio;
+    }
+
+
+    if (typeof result === "string") {
+      audio = result;
+    }
+
+
+    if (!audio) {
+
+      return json({
+        success: true,
+        type: "audio",
+        model,
+        result
+      });
+    }
+
+
+    return json({
+      success: true,
+      type: "audio",
+      model,
+      audio
+    });
+
+  } catch (err) {
+
+    return error(
+      "Erreur pendant la génération audio.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
+}
+
+
+/* ============================================================
+   IMAGE → VIDEO
+   ============================================================ */
+
+async function generateVideo(request, env) {
+
+  if (!env.REPLICATE_API_TOKEN) {
+    return error(
+      "REPLICATE_API_TOKEN n'est pas configuré.",
+      500
+    );
+  }
+
+
+  const body = await readJSON(request);
+
+  if (!body) {
+    return error("JSON invalide.");
+  }
+
+
+  const image =
+    typeof body.image === "string"
+      ? body.image.trim()
+      : "";
+
+  const prompt =
+    typeof body.prompt === "string"
+      ? body.prompt.trim()
+      : "";
+
+
+  if (!image) {
+    return error(
+      "Une image est obligatoire pour la génération vidéo."
+    );
+  }
+
+
+  const duration = clamp(
+    Number(body.duration || 5),
+    2,
+    15
   );
 
+
+  const resolution =
+    body.resolution === "1080p"
+      ? "1080p"
+      : "720p";
+
+
+  const input = {
+    image,
+    prompt,
+    duration,
+    resolution
+  };
+
+
+  try {
+
+    const response = await fetch(
+      REPLICATE_API,
+      {
+        method: "POST",
+
+        headers: {
+          "Authorization":
+            `Bearer ${env.REPLICATE_API_TOKEN}`,
+
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          input
+        })
+      }
+    );
+
+
+    const data = await response.json();
+
+
+    if (!response.ok) {
+
+      return error(
+        "Replicate a refusé la génération vidéo.",
+        response.status,
+        data
+      );
+    }
+
+
+    return json({
+      success: true,
+      type: "video",
+      status: data.status,
+      id: data.id,
+      urls: data.urls || null,
+      prediction: data
+    });
+
+  } catch (err) {
+
+    return error(
+      "Impossible de contacter le service vidéo.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
 }
+
+
+/* ============================================================
+   VIDEO STATUS
+   ============================================================ */
+
+async function videoStatus(request, env) {
+
+  if (!env.REPLICATE_API_TOKEN) {
+    return error(
+      "REPLICATE_API_TOKEN n'est pas configuré.",
+      500
+    );
+  }
+
+
+  const url =
+    new URL(request.url);
+
+  const id =
+    url.searchParams.get("id");
+
+
+  if (!id) {
+    return error(
+      "L'identifiant de la vidéo est obligatoire."
+    );
+  }
+
+
+  try {
+
+    const response = await fetch(
+      `https://api.replicate.com/v1/predictions/${encodeURIComponent(id)}`,
+      {
+        headers: {
+          "Authorization":
+            `Bearer ${env.REPLICATE_API_TOKEN}`
+        }
+      }
+    );
+
+
+    const data = await response.json();
+
+
+    if (!response.ok) {
+
+      return error(
+        "Impossible de récupérer le statut vidéo.",
+        response.status,
+        data
+      );
+    }
+
+
+    return json({
+      success: true,
+      type: "video-status",
+      id,
+      status: data.status,
+      output: data.output || null,
+      error: data.error || null,
+      prediction: data
+    });
+
+  } catch (err) {
+
+    return error(
+      "Erreur pendant la vérification vidéo.",
+      502,
+      err instanceof Error
+        ? err.message
+        : String(err)
+    );
+  }
+}
+
+
+/* ============================================================
+   ROUTEUR PRINCIPAL
+   ============================================================ */
+
+export default {
+
+  async fetch(request, env) {
+
+    if (request.method === "OPTIONS") {
+      return handleOptions();
+    }
+
+
+    const url =
+      new URL(request.url);
+
+    const path =
+      url.pathname;
+
+
+    try {
+
+      /* ---------------- HEALTH ---------------- */
+
+      if (
+        request.method === "GET" &&
+        path === "/health"
+      ) {
+        return await health(env);
+      }
+
+
+      /* ---------------- CHAT ---------------- */
+
+      if (
+        request.method === "POST" &&
+        path === "/chat"
+      ) {
+        return await chat(request, env);
+      }
+
+
+      /* ---------------- SCRIPT ---------------- */
+
+      if (
+        request.method === "POST" &&
+        path === "/generate-script"
+      ) {
+        return await generateScript(
+          request,
+          env
+        );
+      }
+
+
+      /* ---------------- IMAGE ---------------- */
+
+      if (
+        request.method === "POST" &&
+        path === "/generate-image"
+      ) {
+        return await generateImage(
+          request,
+          env
+        );
+      }
+
+
+      /* ---------------- AUDIO ---------------- */
+
+      if (
+        request.method === "POST" &&
+        path === "/generate-audio"
+      ) {
+        return await generateAudio(
+          request,
+          env
+        );
+      }
+
+
+      /* ---------------- VIDEO ---------------- */
+
+      if (
+        request.method === "POST" &&
+        path === "/generate-video"
+      ) {
+        return await generateVideo(
+          request,
+          env
+        );
+      }
+
+
+      /* ---------------- VIDEO STATUS ---------------- */
+
+      if (
+        request.method === "GET" &&
+        path === "/video-status"
+      ) {
+        return await videoStatus(
+          request,
+          env
+        );
+      }
+
+
+      /* ---------------- 404 ---------------- */
+
+      return error(
+        "Route introuvable.",
+        404
+      );
+
+    } catch (err) {
+
+      return error(
+        "Erreur interne du Worker.",
+        500,
+        err instanceof Error
+          ? err.message
+          : String(err)
+      );
+    }
+  }
+};
