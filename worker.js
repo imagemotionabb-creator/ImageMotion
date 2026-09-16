@@ -744,7 +744,59 @@ async function videoStatus(request, env) {
 /* =========================================================
    MAIN ROUTER
 ========================================================= */
+async function generateChat(request, env) {
+  try {
+    if (request.method !== "POST") {
+      return jsonResponse(
+        { success: false, error: "Méthode POST requise." },
+        405
+      );
+    }
 
+    const body = await request.json();
+    const message = String(body.message || "").trim();
+
+    if (!message) {
+      return jsonResponse(
+        { success: false, error: "Le message est vide." },
+        400
+      );
+    }
+
+    const result = await env.AI.run(
+      "@cf/meta/llama-3.1-8b-instruct-fast",
+      {
+        messages: [
+          {
+            role: "system",
+            content:
+              "Tu es Briack AI 5, un assistant IA professionnel, utile, honnête et précis. Réponds dans la langue utilisée par l'utilisateur."
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        max_tokens: 1024
+      }
+    );
+
+    return jsonResponse({
+      success: true,
+      reply: result.response || ""
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error: "Erreur lors de la génération de la réponse.",
+        details: error.message
+      },
+      500
+    );
+  }
+  }
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -821,6 +873,9 @@ export default {
           error: "Route inconnue.",
           path,
         },
+        if (url.pathname === "/chat" && request.method === "POST") {
+  return generateChat(request, env);
+      }
         404
       );
     } catch (error) {
