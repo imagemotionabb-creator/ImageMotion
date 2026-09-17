@@ -433,25 +433,18 @@ button.addEventListener("click", async () => {
       try {
 
         const result =
-          await env.AI.run(
-            IMAGE_MODEL,
-            {
-              prompt,
-              steps:
-                Number.isInteger(body.steps) &&
-                body.steps >= 1 &&
-                body.steps <= 8
-                  ? body.steps
-                  : 4,
-
-              seed:
-                Number.isInteger(body.seed)
-                  ? body.seed
-                  : Math.floor(
-                      Math.random() * 2147483647
-                    )
-            }
-          );
+  await env.AI.run(
+    IMAGE_MODEL,
+    {
+      prompt,
+      steps:
+        Number.isInteger(body.steps) &&
+        body.steps >= 1 &&
+        body.steps <= 8
+          ? body.steps
+          : 4
+    }
+  );
 
         if (!result?.image) {
           return error(
