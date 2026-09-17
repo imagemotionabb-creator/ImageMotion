@@ -9,9 +9,11 @@ const ALLOWED_ORIGINS = "*";
 
 function corsHeaders(origin = "*") {
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS === "*" ? "*" : origin,
+    "Access-Control-Allow-Origin":
+      ALLOWED_ORIGINS === "*" ? "*" : origin,
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400"
   };
 }
@@ -21,16 +23,6 @@ function json(data, status = 200, origin = "*") {
     status,
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
-      ...corsHeaders(origin)
-    }
-  });
-}
-
-function text(data, status = 200, origin = "*") {
-  return new Response(data, {
-    status,
-    headers: {
-      "Content-Type": "text/plain; charset=UTF-8",
       ...corsHeaders(origin)
     }
   });
@@ -57,6 +49,7 @@ async function readJson(request) {
 
 export default {
   async fetch(request, env) {
+
     const url = new URL(request.url);
     const pathname = url.pathname;
     const method = request.method;
@@ -74,6 +67,7 @@ export default {
     ========================= */
 
     if (pathname === "/health" && method === "GET") {
+
       return json({
         success: true,
         app: "Briack AI 5",
@@ -81,22 +75,26 @@ export default {
         statut: "en ligne",
         workersIA: !!env.AI,
         replicateConfigured: !!env.REPLICATE_API_TOKEN,
+
         routes: [
           "/health",
           "/chat",
           "/chat-test",
           "/generate-image",
+          "/image-test",
           "/generate-video",
           "/video-status",
           "/generate-voice",
           "/test-voice"
         ],
+
         modeles: {
           chat: CHAT_MODEL,
           image: IMAGE_MODEL,
           voice: VOICE_MODEL,
           video: "Replicate / Wan 2.7 I2V"
         }
+
       }, 200, origin);
     }
 
@@ -105,14 +103,23 @@ export default {
     ========================= */
 
     if (pathname === "/chat" && method === "POST") {
+
       if (!env.AI) {
-        return error("Workers AI n'est pas configuré.", 500, origin);
+        return error(
+          "Workers AI n'est pas configuré.",
+          500,
+          origin
+        );
       }
 
       const body = await readJson(request);
 
       if (!body) {
-        return error("JSON invalide.", 400, origin);
+        return error(
+          "JSON invalide.",
+          400,
+          origin
+        );
       }
 
       const message =
@@ -121,12 +128,17 @@ export default {
           : "";
 
       if (!message) {
-        return error("Le champ 'message' est obligatoire.", 400, origin);
+        return error(
+          "Le champ 'message' est obligatoire.",
+          400,
+          origin
+        );
       }
 
-      const history = Array.isArray(body.history)
-        ? body.history
-        : [];
+      const history =
+        Array.isArray(body.history)
+          ? body.history
+          : [];
 
       const messages = [
         {
@@ -137,15 +149,19 @@ export default {
       ];
 
       for (const item of history.slice(-20)) {
+
         if (
           item &&
-          (item.role === "user" || item.role === "assistant") &&
+          (item.role === "user" ||
+            item.role === "assistant") &&
           typeof item.content === "string"
         ) {
+
           messages.push({
             role: item.role,
             content: item.content
           });
+
         }
       }
 
@@ -155,11 +171,16 @@ export default {
       });
 
       try {
-        const result = await env.AI.run(CHAT_MODEL, {
-          messages,
-          max_tokens: 1024,
-          temperature: 0.7
-        });
+
+        const result =
+          await env.AI.run(
+            CHAT_MODEL,
+            {
+              messages,
+              max_tokens: 1024,
+              temperature: 0.7
+            }
+          );
 
         return json({
           success: true,
@@ -172,6 +193,7 @@ export default {
         }, 200, origin);
 
       } catch (err) {
+
         return error(
           "Erreur Workers AI : " +
             (err?.message || String(err)),
@@ -186,12 +208,15 @@ export default {
     ========================= */
 
     if (pathname === "/chat-test" && method === "GET") {
+
       const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Briack AI 5 — Test Chat</title>
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Briack AI 5 - Test Chat</title>
 
 <style>
 body {
@@ -205,10 +230,6 @@ body {
 .container {
   max-width: 600px;
   margin: auto;
-}
-
-h1 {
-  text-align: center;
 }
 
 textarea {
@@ -241,7 +262,6 @@ button {
   background: #151b31;
   border-radius: 12px;
   white-space: pre-wrap;
-  min-height: 80px;
 }
 
 .status {
@@ -271,10 +291,17 @@ button {
 
 <script>
 
-const button = document.getElementById("send");
-const message = document.getElementById("message");
-const result = document.getElementById("result");
-const status = document.getElementById("status");
+const button =
+  document.getElementById("send");
+
+const message =
+  document.getElementById("message");
+
+const result =
+  document.getElementById("result");
+
+const status =
+  document.getElementById("status");
 
 button.addEventListener("click", async () => {
 
@@ -286,12 +313,16 @@ button.addEventListener("click", async () => {
   }
 
   button.disabled = true;
-  status.textContent = "Connexion à Briack AI 5...";
+
+  status.textContent =
+    "Connexion à Briack AI 5...";
+
   result.textContent = "";
 
   try {
 
     const response = await fetch("/chat", {
+
       method: "POST",
 
       headers: {
@@ -301,6 +332,7 @@ button.addEventListener("click", async () => {
       body: JSON.stringify({
         message: text
       })
+
     });
 
     const data = await response.json();
@@ -311,17 +343,21 @@ button.addEventListener("click", async () => {
       );
     }
 
-    status.textContent = "✅ Chat fonctionnel";
+    status.textContent =
+      "✅ Chat fonctionnel";
 
     result.textContent =
-      data.response || "Aucune réponse reçue.";
+      data.response ||
+      "Aucune réponse reçue.";
 
   } catch (error) {
 
-    status.textContent = "❌ Erreur";
+    status.textContent =
+      "❌ Erreur";
 
     result.textContent =
-      error.message || String(error);
+      error.message ||
+      String(error);
 
   } finally {
 
@@ -339,7 +375,8 @@ button.addEventListener("click", async () => {
       return new Response(html, {
         status: 200,
         headers: {
-          "Content-Type": "text/html; charset=UTF-8",
+          "Content-Type":
+            "text/html; charset=UTF-8",
           ...corsHeaders(origin)
         }
       });
@@ -349,15 +386,27 @@ button.addEventListener("click", async () => {
        GENERATE IMAGE
     ========================= */
 
-    if (pathname === "/generate-image" && method === "POST") {
+    if (
+      pathname === "/generate-image" &&
+      method === "POST"
+    ) {
+
       if (!env.AI) {
-        return error("Workers AI n'est pas configuré.", 500, origin);
+        return error(
+          "Workers AI n'est pas configuré.",
+          500,
+          origin
+        );
       }
 
       const body = await readJson(request);
 
       if (!body) {
-        return error("JSON invalide.", 400, origin);
+        return error(
+          "JSON invalide.",
+          400,
+          origin
+        );
       }
 
       const prompt =
@@ -366,23 +415,63 @@ button.addEventListener("click", async () => {
           : "";
 
       if (!prompt) {
-        return error("Le champ 'prompt' est obligatoire.", 400, origin);
+        return error(
+          "Le champ 'prompt' est obligatoire.",
+          400,
+          origin
+        );
+      }
+
+      if (prompt.length > 2048) {
+        return error(
+          "Le prompt ne peut pas dépasser 2048 caractères.",
+          400,
+          origin
+        );
       }
 
       try {
-        const result = await env.AI.run(IMAGE_MODEL, {
-          prompt
-        });
 
-        return new Response(result, {
-          status: 200,
-          headers: {
-            "Content-Type": "image/png",
-            ...corsHeaders(origin)
-          }
-        });
+        const result =
+          await env.AI.run(
+            IMAGE_MODEL,
+            {
+              prompt,
+              steps:
+                Number.isInteger(body.steps) &&
+                body.steps >= 1 &&
+                body.steps <= 8
+                  ? body.steps
+                  : 4,
+
+              seed:
+                Number.isInteger(body.seed)
+                  ? body.seed
+                  : Math.floor(
+                      Math.random() * 2147483647
+                    )
+            }
+          );
+
+        if (!result?.image) {
+          return error(
+            "Aucune image n'a été retournée par FLUX.",
+            500,
+            origin
+          );
+        }
+
+        return json({
+          success: true,
+          model: IMAGE_MODEL,
+          mimeType: "image/jpeg",
+          image: result.image,
+          dataURI:
+            `data:image/jpeg;base64,${result.image}`
+        }, 200, origin);
 
       } catch (err) {
+
         return error(
           "Erreur génération image : " +
             (err?.message || String(err)),
@@ -393,10 +482,234 @@ button.addEventListener("click", async () => {
     }
 
     /* =========================
+       IMAGE TEST
+    ========================= */
+
+    if (
+      pathname === "/image-test" &&
+      method === "GET"
+    ) {
+
+      const html = `<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Briack AI 5 - Test Image</title>
+
+<style>
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: #0b1020;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  max-width: 650px;
+  margin: auto;
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  box-sizing: border-box;
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid #39405c;
+  background: #151b31;
+  color: white;
+  font-size: 16px;
+}
+
+button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 15px;
+  border: 0;
+  border-radius: 12px;
+  background: #5865f2;
+  color: white;
+  font-size: 17px;
+  font-weight: bold;
+}
+
+#status {
+  margin-top: 15px;
+  color: #9aa4c7;
+}
+
+img {
+  width: 100%;
+  margin-top: 20px;
+  border-radius: 15px;
+  display: none;
+}
+
+#error {
+  margin-top: 15px;
+  color: #ff8080;
+  white-space: pre-wrap;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🖼️ Briack AI 5</h1>
+
+<p>Test réel de la génération d'image FLUX.</p>
+
+<textarea id="prompt">Une ville futuriste ultra réaliste au coucher du soleil, gratte-ciels modernes, voitures électriques, lumière cinématographique, détails très réalistes.</textarea>
+
+<button id="generate">
+Générer l'image
+</button>
+
+<div id="status"></div>
+
+<div id="error"></div>
+
+<img id="image">
+
+</div>
+
+<script>
+
+const button =
+  document.getElementById("generate");
+
+const prompt =
+  document.getElementById("prompt");
+
+const status =
+  document.getElementById("status");
+
+const error =
+  document.getElementById("error");
+
+const image =
+  document.getElementById("image");
+
+button.addEventListener("click", async () => {
+
+  const text =
+    prompt.value.trim();
+
+  if (!text) {
+    error.textContent =
+      "Écris un prompt.";
+    return;
+  }
+
+  button.disabled = true;
+
+  image.style.display = "none";
+
+  error.textContent = "";
+
+  status.textContent =
+    "🎨 Génération de l'image en cours...";
+
+  try {
+
+    const response =
+      await fetch("/generate-image", {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          prompt: text,
+          steps: 4
+        })
+
+      });
+
+    const data =
+      await response.json();
+
+    if (!response.ok ||
+        !data.success) {
+
+      throw new Error(
+        data.error ||
+        "Erreur inconnue."
+      );
+    }
+
+    if (!data.dataURI) {
+      throw new Error(
+        "Image non reçue."
+      );
+    }
+
+    image.src =
+      data.dataURI;
+
+    image.style.display =
+      "block";
+
+    status.textContent =
+      "✅ Image générée avec succès.";
+
+  } catch (err) {
+
+    status.textContent =
+      "❌ Échec de génération.";
+
+    error.textContent =
+      err.message ||
+      String(err);
+
+  } finally {
+
+    button.disabled = false;
+
+  }
+
+});
+
+</script>
+
+</body>
+
+</html>`;
+
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "Content-Type":
+            "text/html; charset=UTF-8",
+          ...corsHeaders(origin)
+        }
+      });
+    }
+
+    /* =========================
        GENERATE VIDEO
     ========================= */
 
-    if (pathname === "/generate-video" && method === "POST") {
+    if (
+      pathname === "/generate-video" &&
+      method === "POST"
+    ) {
+
       if (!env.REPLICATE_API_TOKEN) {
         return error(
           "Replicate n'est pas encore configuré.",
@@ -405,10 +718,15 @@ button.addEventListener("click", async () => {
         );
       }
 
-      const body = await readJson(request);
+      const body =
+        await readJson(request);
 
       if (!body) {
-        return error("JSON invalide.", 400, origin);
+        return error(
+          "JSON invalide.",
+          400,
+          origin
+        );
       }
 
       const image =
@@ -430,35 +748,46 @@ button.addEventListener("click", async () => {
       }
 
       try {
-        const replicateResponse = await fetch(
-          REPLICATE_VIDEO_URL,
-          {
-            method: "POST",
 
-            headers: {
-              "Authorization":
-                `Bearer ${env.REPLICATE_API_TOKEN}`,
-              "Content-Type": "application/json"
-            },
+        const replicateResponse =
+          await fetch(
+            REPLICATE_VIDEO_URL,
+            {
+              method: "POST",
 
-            body: JSON.stringify({
-              input: {
-                image,
-                prompt
-              }
-            })
-          }
-        );
+              headers: {
+                "Authorization":
+                  `Bearer ${env.REPLICATE_API_TOKEN}`,
 
-        const data = await replicateResponse.json();
+                "Content-Type":
+                  "application/json"
+              },
+
+              body: JSON.stringify({
+                input: {
+                  image,
+                  prompt
+                }
+              })
+            }
+          );
+
+        const data =
+          await replicateResponse.json();
 
         return json({
-          success: replicateResponse.ok,
-          provider: "Replicate",
+          success:
+            replicateResponse.ok,
+
+          provider:
+            "Replicate",
+
           data
+
         }, replicateResponse.status, origin);
 
       } catch (err) {
+
         return error(
           "Erreur Replicate : " +
             (err?.message || String(err)),
@@ -472,8 +801,13 @@ button.addEventListener("click", async () => {
        VIDEO STATUS
     ========================= */
 
-    if (pathname === "/video-status" && method === "GET") {
-      const id = url.searchParams.get("id");
+    if (
+      pathname === "/video-status" &&
+      method === "GET"
+    ) {
+
+      const id =
+        url.searchParams.get("id");
 
       if (!id) {
         return error(
@@ -492,24 +826,31 @@ button.addEventListener("click", async () => {
       }
 
       try {
-        const response = await fetch(
-          `https://api.replicate.com/v1/predictions/${encodeURIComponent(id)}`,
-          {
-            headers: {
-              "Authorization":
-                `Bearer ${env.REPLICATE_API_TOKEN}`
-            }
-          }
-        );
 
-        const data = await response.json();
+        const response =
+          await fetch(
+            `https://api.replicate.com/v1/predictions/${encodeURIComponent(id)}`,
+            {
+              headers: {
+                "Authorization":
+                  `Bearer ${env.REPLICATE_API_TOKEN}`
+              }
+            }
+          );
+
+        const data =
+          await response.json();
 
         return json({
-          success: response.ok,
+          success:
+            response.ok,
+
           data
+
         }, response.status, origin);
 
       } catch (err) {
+
         return error(
           "Erreur statut vidéo : " +
             (err?.message || String(err)),
@@ -523,15 +864,28 @@ button.addEventListener("click", async () => {
        GENERATE VOICE
     ========================= */
 
-    if (pathname === "/generate-voice" && method === "POST") {
+    if (
+      pathname === "/generate-voice" &&
+      method === "POST"
+    ) {
+
       if (!env.AI) {
-        return error("Workers AI n'est pas configuré.", 500, origin);
+        return error(
+          "Workers AI n'est pas configuré.",
+          500,
+          origin
+        );
       }
 
-      const body = await readJson(request);
+      const body =
+        await readJson(request);
 
       if (!body) {
-        return error("JSON invalide.", 400, origin);
+        return error(
+          "JSON invalide.",
+          400,
+          origin
+        );
       }
 
       const textInput =
@@ -548,19 +902,31 @@ button.addEventListener("click", async () => {
       }
 
       try {
-        const result = await env.AI.run(VOICE_MODEL, {
-          text: textInput
-        });
 
-        return new Response(result, {
-          status: 200,
-          headers: {
-            "Content-Type": "audio/mpeg",
-            ...corsHeaders(origin)
+        const result =
+          await env.AI.run(
+            VOICE_MODEL,
+            {
+              text: textInput
+            }
+          );
+
+        return new Response(
+          result,
+          {
+            status: 200,
+
+            headers: {
+              "Content-Type":
+                "audio/mpeg",
+
+              ...corsHeaders(origin)
+            }
           }
-        });
+        );
 
       } catch (err) {
+
         return error(
           "Erreur génération voix : " +
             (err?.message || String(err)),
@@ -574,13 +940,19 @@ button.addEventListener("click", async () => {
        TEST VOICE
     ========================= */
 
-    if (pathname === "/test-voice" && method === "GET") {
+    if (
+      pathname === "/test-voice" &&
+      method === "GET"
+    ) {
 
       const html = `<!DOCTYPE html>
+
 <html lang="fr">
 
 <head>
+
 <meta charset="UTF-8">
+
 <meta name="viewport"
 content="width=device-width, initial-scale=1.0">
 
@@ -665,18 +1037,21 @@ const text =
 if (!SpeechRecognition) {
 
   status.textContent =
-    "La reconnaissance vocale n'est pas disponible dans ce navigateur.";
+    "La reconnaissance vocale n'est pas disponible.";
 
 } else {
 
   const recognition =
     new SpeechRecognition();
 
-  recognition.lang = "fr-FR";
+  recognition.lang =
+    "fr-FR";
 
-  recognition.continuous = false;
+  recognition.continuous =
+    false;
 
-  recognition.interimResults = true;
+  recognition.interimResults =
+    true;
 
   recognition.onstart = () => {
 
@@ -700,14 +1075,16 @@ if (!SpeechRecognition) {
 
     }
 
-    text.textContent = result;
+    text.textContent =
+      result;
 
   };
 
   recognition.onerror = event => {
 
     status.textContent =
-      "Erreur : " + event.error;
+      "Erreur : " +
+      event.error;
 
   };
 
@@ -729,12 +1106,14 @@ if (!SpeechRecognition) {
 </script>
 
 </body>
+
 </html>`;
 
       return new Response(html, {
         status: 200,
         headers: {
-          "Content-Type": "text/html; charset=UTF-8",
+          "Content-Type":
+            "text/html; charset=UTF-8",
           ...corsHeaders(origin)
         }
       });
