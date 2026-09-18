@@ -1620,7 +1620,50 @@ function startRecognition(){
         }
       );
     }
+// =========================================================
+// VOICE TEST — MELOTTS
+// =========================================================
 
+if (path === "/voice-test" && method === "GET") {
+  const result = await env.AI.run(VOICE_MODEL, {
+    prompt:
+      "Bienvenue dans Briack AI 5. Ceci est un test réel de génération vocale. La voix est produite par notre moteur de synthèse vocale.",
+    lang: "fr",
+  });
+
+  if (result instanceof ReadableStream) {
+    return new Response(result, {
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition":
+          'inline; filename="briack-voice-test.mp3"',
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  if (result instanceof ArrayBuffer) {
+    return new Response(result, {
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition":
+          'inline; filename="briack-voice-test.mp3"',
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
+  return json({
+    success: true,
+    model: VOICE_MODEL,
+    language: "fr",
+    result,
+  });
+  }
 
     /* =========================================================
        404
