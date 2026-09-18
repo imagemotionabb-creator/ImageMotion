@@ -1426,14 +1426,20 @@ async function checkStatus(){
 
       try {
 
-        const result =
-          await env.AI.run(
-            VOICE_MODEL,
-            {
-              text
-            }
-          );
+        const language =
+  typeof body.lang === "string" &&
+  body.lang.trim()
+    ? body.lang.trim().toLowerCase()
+    : "fr";
 
+const result =
+  await env.AI.run(
+    VOICE_MODEL,
+    {
+      prompt: text,
+      lang: language
+    }
+  );
         return new Response(
           result,
           {
@@ -1619,52 +1625,72 @@ function startRecognition(){
           }
         }
       );
+/* =========================================================
+   VOICE TEST — MELOTTS
+   ========================================================= */
+
+if (
+  url.pathname === "/voice-test" &&
+  request.method === "GET"
+) {
+  try {
+    const result = await env.AI.run(
+      VOICE_MODEL,
+      {
+        prompt:
+          "Bienvenue dans Briack AI 5. Ceci est un test réel de génération vocale. La voix est produite par notre moteur de synthèse vocale.",
+        lang: "fr"
+      }
+    );
+
+    if (result instanceof ReadableStream) {
+      return new Response(result, {
+        status: 200,
+        headers: {
+          ...corsHeaders(origin),
+          "Content-Type": "audio/mpeg",
+          "Content-Disposition":
+            'inline; filename="briack-voice-test.mp3"',
+          "Cache-Control": "no-store"
+        }
+      });
     }
-// =========================================================
-// VOICE TEST — MELOTTS
-// =========================================================
 
-if (path === "/voice-test" && method === "GET") {
-  const result = await env.AI.run(VOICE_MODEL, {
-    prompt:
-      "Bienvenue dans Briack AI 5. Ceci est un test réel de génération vocale. La voix est produite par notre moteur de synthèse vocale.",
-    lang: "fr",
-  });
+    if (result instanceof ArrayBuffer) {
+      return new Response(result, {
+        status: 200,
+        headers: {
+          ...corsHeaders(origin),
+          "Content-Type": "audio/mpeg",
+          "Content-Disposition":
+            'inline; filename="briack-voice-test.mp3"',
+          "Cache-Control": "no-store"
+        }
+      });
+    }
 
-  if (result instanceof ReadableStream) {
-    return new Response(result, {
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "Content-Type": "audio/mpeg",
-        "Content-Disposition":
-          'inline; filename="briack-voice-test.mp3"',
-        "Cache-Control": "no-store",
+    return json(
+      {
+        success: true,
+        model: VOICE_MODEL,
+        language: "fr",
+        result
       },
-    });
-  }
+      200,
+      origin
+    );
 
-  if (result instanceof ArrayBuffer) {
-    return new Response(result, {
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        "Content-Type": "audio/mpeg",
-        "Content-Disposition":
-          'inline; filename="briack-voice-test.mp3"',
-        "Cache-Control": "no-store",
-      },
-    });
+  } catch (err) {
+    return error(
+      `Erreur MeloTTS : ${err?.message || err}`,
+      500,
+      origin,
+      {
+        model: VOICE_MODEL
+      }
+    );
   }
-
-  return json({
-    success: true,
-    model: VOICE_MODEL,
-    language: "fr",
-    result,
-  });
-  }
-
+}
     /* =========================================================
        404
        ========================================================= */
